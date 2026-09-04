@@ -13,24 +13,21 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install KraftKit
-        run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://get.kraftkit.sh | sh
-          echo "$HOME/.kraftkit/bin" >> $GITHUB_PATH
-          echo "/root/.kraftkit/bin" >> $GITHUB_PATH
-          echo "/usr/local/bin" >> $GITHUB_PATH
+      - name: Setup Unikraft CLI
+        uses: unikraft/setup-action@v1
+        with:
+          token: ${{ secrets.UKC_TOKEN }}
 
-      - name: Deploy to Unikraft Cloud
+      - name: Build and Deploy to Unikraft Cloud
         env:
-          UKC_TOKEN: ${{ secrets.UKC_TOKEN }}
-          KRAFTCLOUD_TOKEN: ${{ secrets.UKC_TOKEN }}
-          KRAFTCLOUD_METRO: fra
+          UKC_METRO: fra
         run: |
-          kraft login -u "robot$bigboss.users.kraftcloud" -t "$UKC_TOKEN" index.unikraft.io
-          kraft cloud deploy \
+          unikraft build . --output bigboss/web-ssh:latest
+          unikraft run \
             --metro fra \
+            --publish 443:3000/http+tls \
+            --memory 1024M \
             --name web-ssh-console \
-            --memory 1024 \
-            --port 443:3000 \
-            -e APP_ENV=development \
-            -e PORT=3000
+            --env APP_ENV=development \
+            --env PORT=3000 \
+            --image bigboss/web-ssh:latest
