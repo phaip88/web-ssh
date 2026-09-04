@@ -24,13 +24,6 @@ COPY --from=build --chown=nonroot:nonroot /app/public ./public
 COPY --from=build --chown=nonroot:nonroot /app/next.config.ts ./next.config.ts
 COPY --from=build --chown=nonroot:nonroot /app/drizzle ./drizzle
 COPY --from=build --chown=nonroot:nonroot /app/drizzle.config.json ./drizzle.config.json
-COPY --from=build --chown=nonroot:nonroot /app/package.json /package.json
-COPY --from=build --chown=nonroot:nonroot /app/node_modules /node_modules
-COPY --from=build --chown=nonroot:nonroot /app/.next /.next
-COPY --from=build --chown=nonroot:nonroot /app/public /public
-COPY --from=build --chown=nonroot:nonroot /app/next.config.ts /next.config.ts
-COPY --from=build --chown=nonroot:nonroot /app/drizzle /drizzle
-COPY --from=build --chown=nonroot:nonroot /app/drizzle.config.json /drizzle.config.json
 USER nonroot
 EXPOSE 3000
 # Distroless has no shell; healthchecks are performed by the orchestrator (compose/k8s probes).
