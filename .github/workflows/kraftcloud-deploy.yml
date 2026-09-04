@@ -32,4 +32,6 @@ jobs:
             --env APP_ENV=development \
             --env PORT=3000 \
             --env NODE_PATH=/app/node_modules \
+            --env DATABASE_URL=${{ secrets.DATABASE_URL }} \
+            --env APP_MASTER_KEY=${{ secrets.APP_MASTER_KEY }} \
             --image bigboss/web-ssh:latest
