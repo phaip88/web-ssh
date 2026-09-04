@@ -9,6 +9,7 @@ RUN --mount=type=cache,target=/root/.npm npm ci --ignore-scripts
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/app_db
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build && npm prune --omit=dev

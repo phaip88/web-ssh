@@ -53,8 +53,8 @@ export default function ReplayPage() {
     if (!playing || !data) return;
     const outputs = data.events.filter((e) => e.kind === "output");
     if (pos >= outputs.length) {
-      setPlaying(false);
-      return;
+      const t = setTimeout(() => setPlaying(false), 0);
+      return () => clearTimeout(t);
     }
     const cur = outputs[pos];
     const prev = outputs[pos - 1];
