@@ -1,0 +1,28 @@
+id: io.webssh.docker-troubleshooter
+name: Docker Troubleshooter
+version: 1.0.0
+description: Diagnose restarting/OOM-killed containers using docker ps/inspect/logs (read-only).
+author: WebSSH Team
+license: Apache-2.0
+entrypoint: skill.py
+compatibleRuntime: python-3.12-sandbox
+permissions: [terminal:execute, container:list, logs:search]
+tools:
+  - name: docker.diagnose
+    description: Inspect a container's state, restart count, OOM flag and last log lines.
+    inputSchema: { type: object, properties: { container: { type: string, pattern: "^[A-Za-z0-9_.-]{1,128}$" } }, required: [container] }
+    risk: R1
+    requiresApproval: false
+  - name: docker.restart
+    description: Restart a container (requires approval; disabled in production by policy).
+    inputSchema: { type: object, properties: { container: { type: string } }, required: [container] }
+    risk: R3
+    requiresApproval: true
+prompts: []
+workflows: []
+dependencies: {}
+environmentSchema: {}
+configSchema: {}
+secretsSchema: {}
+networkPolicy: { egress: none, allow: [] }
+filesystemPolicy: { readOnly: true, paths: [] }

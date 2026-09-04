@@ -1,0 +1,85 @@
+# Single-node production profile: `docker compose --profile prod up -d`
+# Local development: see docker-compose.dev.yml
+name: webssh-agent
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-app_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./deploy/backup:/backup
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [backend]
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?set REDIS_PASSWORD}"]
+    volumes: [redisdata:/data]
+    networks: [backend]
+
+  migrate:
+    build: .
+    profiles: [prod]
+    command: ["node_modules/drizzle-kit/bin.cjs", "push", "--force"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-app_db}
+    depends_on:
+      postgres: { condition: service_healthy }
+    networks: [backend]
+
+  app:
+    build: .
+    profiles: [prod]
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp, /app/.next/cache]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    environment:
+      APP_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-app_db}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      APP_MASTER_KEY: ${APP_MASTER_KEY:?generate with: openssl rand -base64 32}
+      ALLOWED_ORIGINS: ${PUBLIC_URL:?e.g. https://ssh.example.com}
+      MOCK_SSH_ENABLED: "false"
+      NEXT_PUBLIC_SHOW_DEMO_HINT: "false"
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_started }
+    deploy:
+      resources:
+        limits: { cpus: "2", memory: 1g }
+    logging:
+      driver: json-file
+      options: { max-size: "50m", max-file: "5" }
+    networks: [backend, edge]
+
+  caddy:
+    image: caddy:2-alpine
+    profiles: [prod]
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST:?e.g. ssh.example.com}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+    depends_on: [app]
+    networks: [edge]
+
+volumes:
+  pgdata: {}
+  redisdata: {}
+  caddydata: {}
+networks:
+  backend: { internal: true }
+  edge: {}

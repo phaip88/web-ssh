@@ -1,0 +1,23 @@
+id: io.webssh.kubernetes-readonly-diagnostics
+name: Kubernetes Read-only Diagnostics
+version: 1.0.0
+description: kubectl get/describe/logs/events for crash-looping workloads. Never mutates cluster state.
+author: WebSSH Team
+license: Apache-2.0
+entrypoint: skill.py
+compatibleRuntime: python-3.12-sandbox
+permissions: [terminal:execute, kubernetes:get, logs:search]
+tools:
+  - name: k8s.pod_diagnose
+    description: Describe a pod, fetch previous-container logs and related events.
+    inputSchema: { type: object, properties: { namespace: { type: string }, pod: { type: string } }, required: [namespace, pod] }
+    risk: R1
+    requiresApproval: false
+prompts: []
+workflows: []
+dependencies: {}
+environmentSchema: { type: object, properties: { KUBECONFIG: { type: string } } }
+configSchema: {}
+secretsSchema: {}
+networkPolicy: { egress: none, allow: [] }
+filesystemPolicy: { readOnly: true, paths: ["~/.kube/config"] }

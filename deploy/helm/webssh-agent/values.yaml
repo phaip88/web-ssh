@@ -1,0 +1,55 @@
+replicaCount: 2
+image:
+  repository: ghcr.io/example/webssh-agent
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+  digest: "" # pin sha256 digest in production
+
+service:
+  port: 3000
+ingress:
+  enabled: true
+  className: nginx
+  host: ssh.example.com
+  tls: true
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"        # SSE
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/affinity: "cookie"            # sticky sessions per gateway node
+    nginx.ingress.kubernetes.io/session-cookie-name: "webssh_node"
+
+# Secrets are referenced, never templated inline. Create with:
+#   kubectl create secret generic webssh-agent-secrets --from-literal=DATABASE_URL=... --from-literal=APP_MASTER_KEY=$(openssl rand -base64 32)
+existingSecret: webssh-agent-secrets
+env:
+  APP_ENV: production
+  ALLOWED_ORIGINS: https://ssh.example.com
+  MOCK_SSH_ENABLED: "false"
+  PROVIDER_ALLOW_HTTP: "false"
+  NEXT_PUBLIC_SHOW_DEMO_HINT: "false"
+
+resources:
+  requests: { cpu: 250m, memory: 384Mi }
+  limits: { cpu: "2", memory: 1Gi }
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+podDisruptionBudget:
+  minAvailable: 1
+networkPolicy:
+  enabled: true
+  sshEgressCidrs: ["10.0.0.0/8"]       # where managed hosts live
+  llmEgress: true                      # allow 443 egress for model providers
+migration:
+  enabled: true
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  fsGroup: 65532
+  seccompProfile: { type: RuntimeDefault }
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities: { drop: [ALL] }

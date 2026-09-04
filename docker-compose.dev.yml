@@ -1,0 +1,27 @@
+# Local development: `docker compose -f docker-compose.dev.yml up -d && npm run dev`
+name: webssh-agent-dev
+services:
+  postgres:
+    image: postgres:16-alpine
+    ports: ["5432:5432"]
+    environment:
+      POSTGRES_DB: app_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes: [pgdata-dev:/var/lib/postgresql/data]
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+  # Optional real OpenSSH target for integration tests beyond the built-in mock server.
+  sshd:
+    image: linuxserver/openssh-server:latest
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      USER_NAME: testuser
+      USER_PASSWORD: testpassword
+      PASSWORD_ACCESS: "true"
+      SUDO_ACCESS: "false"
+    ports: ["2223:2222"]
+volumes:
+  pgdata-dev: {}

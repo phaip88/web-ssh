@@ -1,0 +1,93 @@
+openapi: 3.1.0
+info:
+  title: WebSSH Agent Console API
+  version: 0.1.0
+  description: Cookie-authenticated JSON API. All non-GET requests require an Origin header matching the site. Responses are `{data}` or `{error:{code,message,details}}`.
+servers: [{ url: /api }]
+components:
+  securitySchemes:
+    cookie: { type: apiKey, in: cookie, name: webssh_session }
+  schemas:
+    Error: { type: object, properties: { error: { type: object, properties: { code: { type: string }, message: { type: string }, details: {} } } } }
+    Host:
+      type: object
+      required: [name, host, username, authType]
+      properties:
+        name: { type: string }
+        host: { type: string }
+        port: { type: integer, default: 22 }
+        username: { type: string }
+        authType: { type: string, enum: [password, private_key, certificate] }
+        credentialId: { type: [string, "null"], format: uuid }
+        labels: { type: array, items: { type: string } }
+        environment: { type: string, enum: [development, staging, production] }
+        keepaliveInterval: { type: integer }
+        connectionTimeout: { type: integer }
+        maxSessionDuration: { type: integer }
+        hostKeyPolicy: { type: string, enum: [strict, tofu] }
+        isFavorite: { type: boolean }
+    Credential:
+      type: object
+      required: [name, type]
+      properties: { name: { type: string }, type: { type: string, enum: [password, private_key] }, password: { type: string, writeOnly: true }, privateKey: { type: string, writeOnly: true }, passphrase: { type: string, writeOnly: true }, expiresAt: { type: string, format: date-time } }
+    Provider:
+      type: object
+      required: [name, kind, defaultModel]
+      properties: { name: { type: string }, kind: { type: string, enum: [mock, openai, openai_compatible, azure_openai, anthropic, ollama, vllm] }, baseUrl: { type: string, format: uri }, apiKey: { type: string, writeOnly: true }, headers: { type: object, additionalProperties: { type: string }, writeOnly: true }, defaultModel: { type: string }, contextWindow: { type: integer }, maxOutputTokens: { type: integer }, isDefault: { type: boolean }, private: { type: boolean } }
+    ProtocolMessage:
+      type: object
+      required: [v, id, ts, sessionId, type]
+      properties: { v: { const: 1 }, id: { type: string }, ts: { type: integer }, sessionId: { type: string, format: uuid }, type: { type: string } }
+security: [{ cookie: [] }]
+paths:
+  /auth/login: { post: { security: [], requestBody: { content: { application/json: { schema: { type: object, required: [email, password], properties: { email: { type: string }, password: { type: string } } } } } }, responses: { "200": { description: session cookie set }, "401": { description: invalid or locked } } } }
+  /auth/logout: { post: { responses: { "200": { description: ok } } } }
+  /auth/me: { get: { responses: { "200": { description: user, organizations, workspaces with roles and permissions } } } }
+  /hosts:
+    get: { parameters: [{ name: workspaceId, in: query, schema: { type: string } }], responses: { "200": { description: list } } }
+    post: { requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/Host" } } } }, responses: { "201": { description: created } } }
+  /hosts/{id}:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    get: { responses: { "200": { description: host with hostKeys } } }
+    patch: { requestBody: { content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Host" }, { properties: { version: { type: integer } } }] } } } }, responses: { "200": { description: updated }, "409": { description: optimistic lock conflict } } }
+    delete: { responses: { "200": { description: soft-deleted } } }
+  /hosts/{id}/host-keys:
+    post: { parameters: [{ name: id, in: path, required: true, schema: { type: string } }], requestBody: { content: { application/json: { schema: { type: object, required: [action], properties: { keyId: { type: string }, fingerprint: { type: string }, action: { type: string, enum: [trust, revoke] } } } } } }, responses: { "200": { description: status } } }
+  /credentials:
+    get: { responses: { "200": { description: public metadata only (never secrets) } } }
+    post: { requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/Credential" } } } }, responses: { "201": { description: created } } }
+  /credentials/{id}: { delete: { parameters: [{ name: id, in: path, required: true, schema: { type: string } }, { name: mode, in: query, schema: { type: string, enum: [revoke] } }], responses: { "200": { description: revoked or deleted } } } }
+  /terminal/sessions:
+    get: { parameters: [{ name: all, in: query, schema: { type: boolean } }], responses: { "200": { description: sessions (all requires sessions:read_all) } } }
+    post: { requestBody: { content: { application/json: { schema: { type: object, required: [hostId], properties: { hostId: { type: string }, cols: { type: integer }, rows: { type: integer } } } } } }, responses: { "201": { description: session opened }, "428": { description: HOST_KEY_UNKNOWN – approve fingerprint }, "409": { description: HOST_KEY_MISMATCH }, "502": { description: SSH_ERROR } } }
+  /terminal/sessions/{id}:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    get: { responses: { "200": { description: session metadata + recorded events (replay) } } }
+    delete: { responses: { "200": { description: closed } } }
+  /terminal/sessions/{id}/stream: { get: { parameters: [{ name: id, in: path, required: true, schema: { type: string } }, { name: since, in: query, schema: { type: integer } }], responses: { "200": { description: text/event-stream of ProtocolMessage frames } } } }
+  /terminal/sessions/{id}/message: { post: { parameters: [{ name: id, in: path, required: true, schema: { type: string } }], requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/ProtocolMessage" } } } }, responses: { "200": { description: ok + current seq } } } }
+  /agent/conversations:
+    get: { responses: { "200": { description: my conversations } } }
+    post: { requestBody: { content: { application/json: { schema: { type: object, properties: { terminalSessionId: { type: string }, hostId: { type: string }, mode: { type: string, enum: [ask, suggest, approval, auto, plan] }, providerId: { type: string }, model: { type: string } } } } } }, responses: { "201": { description: created } } }
+  /agent/conversations/{id}:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    get: { responses: { "200": { description: conversation, messages, toolCalls, pendingApprovals } } }
+    patch: { responses: { "200": { description: updated (auto mode requires agent:auto) } } }
+  /agent/conversations/{id}/messages: { post: { parameters: [{ name: id, in: path, required: true, schema: { type: string } }], requestBody: { content: { application/json: { schema: { type: object, required: [content], properties: { content: { type: string, maxLength: 16000 } } } } } }, responses: { "200": { description: text/event-stream agent run } } } }
+  /approvals: { get: { parameters: [{ name: status, in: query, schema: { type: string } }], responses: { "200": { description: list } } } }
+  /approvals/{id}/decide: { post: { parameters: [{ name: id, in: path, required: true, schema: { type: string } }], requestBody: { content: { application/json: { schema: { type: object, required: [decision], properties: { decision: { type: string, enum: [approved, rejected] }, note: { type: string } } } } } }, responses: { "200": { description: text/event-stream continued run } } } }
+  /providers:
+    get: { responses: { "200": { description: visible providers (tenant + own private) } } }
+    post: { requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/Provider" } } } }, responses: { "201": { description: created }, "400": { description: SSRF-rejected base URL } } }
+  /providers/{id}:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    post: { responses: { "200": { description: health check + models } } }
+    delete: { responses: { "200": { description: deleted } } }
+  /memories:
+    get: { responses: { "200": { description: my memories } } }
+    post: { responses: { "201": { description: created (secret-like content rejected) } } }
+    delete: { parameters: [{ name: id, in: query, required: true, schema: { type: string } }], responses: { "200": { description: deleted } } }
+  /tools: { get: { responses: { "200": { description: tool registry with schemas, risk, approval and limits } } } }
+  /usage: { get: { responses: { "200": { description: 30-day token usage by model and day } } } }
+  /audit: { get: { parameters: [{ name: action, in: query, schema: { type: string } }, { name: result, in: query, schema: { type: string } }, { name: riskLevel, in: query, schema: { type: string } }, { name: from, in: query, schema: { type: string } }, { name: to, in: query, schema: { type: string } }, { name: verify, in: query, schema: { type: boolean } }, { name: format, in: query, schema: { type: string, enum: [csv] } }], responses: { "200": { description: events (+ chain verification) or CSV } } } }
+  /health: { get: { security: [], parameters: [{ name: probe, in: query, schema: { type: string, enum: [live] } }], responses: { "200": { description: ok }, "503": { description: degraded } } } }

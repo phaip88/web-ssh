@@ -1,0 +1,25 @@
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks: [{ id: gitleaks }]
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: detect-private-key
+      - id: check-added-large-files
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+        exclude: ^deploy/helm/
+  - repo: local
+    hooks:
+      - id: typecheck
+        name: tsc
+        entry: npx tsc --noEmit
+        language: system
+        pass_filenames: false
+      - id: lint
+        name: eslint
+        entry: npx eslint
+        language: system
+        files: \.(ts|tsx)$
