@@ -30,4 +30,5 @@ jobs:
             --name web-ssh-console \
             --env APP_ENV=development \
             --env PORT=3000 \
+            --env NODE_PATH=/node_modules:/app/node_modules \
             --image bigboss/web-ssh:latest
